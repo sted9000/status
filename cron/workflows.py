@@ -2,7 +2,7 @@
 import os
 import httpx
 from dotenv import load_dotenv
-
+from supabase import create_client, Client
 # Load environment variables
 load_dotenv()
 
@@ -13,6 +13,11 @@ N8N_PATH = os.getenv("N8N_PATH", "")
 N8N_API_KEY = os.getenv("N8N_API_KEY")
 N8N_API_VERSION = os.getenv("N8N_API_VERSION", "1")
 
+# Initialize Supabase client
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_key = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(supabase_url, supabase_key)
+
 
 class N8NClient:
     def __init__(self):
@@ -20,7 +25,7 @@ class N8NClient:
             raise ValueError("N8N_API_KEY environment variable is not set")
         
         # Construct the base URL
-        self.base_url = f"{N8N_HOST}:{N8N_PORT}/{N8N_PATH}".rstrip("/")
+        self.base_url = f"{N8N_HOST}/{N8N_PATH}".rstrip("/")
         self.api_url = f"{self.base_url}/api/v{N8N_API_VERSION}"
         self.headers = {
             "accept": "application/json",
@@ -44,10 +49,10 @@ class N8NClient:
         try:
             print(f"Fetching workflows with params: {params}")
             response = self.client.get(url, headers=self.headers, params=params)
+            print(f"Response: {response}")
             response.raise_for_status()
             workflows = response.json()
-            print(f"Retrieved {len(workflows)} workflows")
-            return workflows
+            return workflows['data']
         except Exception as e:
             print(f"Error occurred while fetching workflows: {e}")
             raise
@@ -107,13 +112,61 @@ class N8NClient:
             raise
 
 
+def get_workflow_status(executions):
+    """
+    Get the status of a workflow based on its executions.
+    
+    Args:
+        executions: List of execution objects
+    """
+
+    # Sort the executions by startedAt date
+    executions.sort(key=lambda x: x.get("startedAt"))
+
+    last_execution = None
+    last_failed_execution = None
+    last_successful_execution = None
+
+    for execution in executions:
+        last_execution = execution
+        if execution.get("status") == "error":
+            last_failed_execution = execution
+        elif execution.get("status") == "success":
+            last_successful_execution = execution
+
+    return {
+        "lastExecution": last_execution,
+        "lastFailedExecution": last_failed_execution,
+        "lastSuccessfulExecution": last_successful_execution
+    }
+
+def insert_workflow_status(workflow_id, workflow_status):
+    """
+    Insert the workflow status into the supabase database.
+
+    """
+    print(workflow_status)
+    # format the workflow status object
+    status = "success" if workflow_status.get("lastExecution", {}).get("finished", None) == True else "error"
+    workflow_status = {
+        "service_id": workflow_id,
+        "status": status,
+        "last_execution": workflow_status.get("lastExecution", {}).get("startedAt", None),
+        "message": workflow_status.get("lastExecution", {}).get("message", None),
+        "tool_name": "n8n"
+    }
+
+    # Insert the workflow status into the database
+    supabase.table("service_updates").insert(workflow_status).execute()
+
+
 def main():
     """Main function to retrieve all workflows and their executions."""
     try:
         client = N8NClient()
         
         # Get all active workflows
-        workflows = client.get_all_workflows(active=True)
+        workflows = client.get_all_workflows(active=False)
         
         # Get executions for each workflow
         all_executions = []
@@ -125,11 +178,12 @@ def main():
                 print(f"Processing workflow: {workflow_name} (ID: {workflow_id})")
                 executions = client.get_workflow_executions(workflow_id)
                 
-                # Add workflow info to each execution for easier identification
-                for execution in executions:
-                    execution["workflowName"] = workflow_name
-                
-                all_executions.extend(executions)
+                # Extract the execution data
+                workflow_status = get_workflow_status(executions)
+
+                # Insert the workflow status into the database
+                insert_workflow_status(workflow_id, workflow_status)
+
             else:
                 print(f"Skipping workflow with missing ID: {workflow_name}")
         

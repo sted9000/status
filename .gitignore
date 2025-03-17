@@ -34,5 +34,6 @@ coverage
 # Environment variables
 server/.env
 client/.env
+cron/.env
 .env.*
 !.env.example
