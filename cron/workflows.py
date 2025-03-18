@@ -8,7 +8,6 @@ load_dotenv()
 
 # N8N API Configuration
 N8N_HOST = os.getenv("N8N_HOST", "http://localhost")
-N8N_PORT = os.getenv("N8N_PORT", "5678")
 N8N_PATH = os.getenv("N8N_PATH", "")
 N8N_API_KEY = os.getenv("N8N_API_KEY")
 N8N_API_VERSION = os.getenv("N8N_API_VERSION", "1")
@@ -183,6 +182,11 @@ def main():
 
             else:
                 print(f"Skipping workflow with missing ID: {workflow_name}")
+                
+
+        # exit connection
+        supabase.close()
+        print("Supabase connection closed")
         
         return {
             "workflows_count": len(workflows),
