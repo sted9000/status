@@ -22,7 +22,7 @@ if ! command -v python3 &> /dev/null; then
 fi
 
 # Check if required environment variables are set
-required_vars=("N8N_HOST" "N8N_PATH" "N8N_API_KEY" "N8N_API_VERSION" "SUPABASE_URL" "SUPABASE_KEY" "TOOL_NAME")
+required_vars=("N8N_HOST" "N8N_API_KEY" "N8N_API_VERSION" "SUPABASE_URL" "SUPABASE_KEY" "TOOL_NAME")
 missing_vars=()
 
 for var in "${required_vars[@]}"; do
