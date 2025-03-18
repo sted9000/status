@@ -123,41 +123,38 @@ def get_workflow_status(executions):
     # Sort the executions by startedAt date
     executions.sort(key=lambda x: x.get("startedAt"))
 
+    last_status = None
     last_execution = None
     last_failed_execution = None
     last_successful_execution = None
 
     for execution in executions:
-        last_execution = execution
-        if execution.get("status") == "error":
-            last_failed_execution = execution
-        elif execution.get("status") == "success":
-            last_successful_execution = execution
+        last_status = 'success' if execution["finished"] else 'failed'
+        last_execution = execution["startedAt"]
+        if execution.get("finished") == False:
+            last_failed_execution = execution["startedAt"]
+        elif execution.get("finished") == True:
+            last_successful_execution = execution["startedAt"]
 
     return {
-        "lastExecution": last_execution,
-        "lastFailedExecution": last_failed_execution,
-        "lastSuccessfulExecution": last_successful_execution
+        "status": last_status,
+        "message": None,
+        "last_execution": last_execution,
+        "last_error": last_failed_execution,
+        "last_success": last_successful_execution
     }
 
-def insert_workflow_status(workflow_id, workflow_status):
+def insert_workflow_status(workflow_status, workflow_id, tool_name):
     """
     Insert the workflow status into the supabase database.
 
     """
-    print(workflow_status)
-    # format the workflow status object
-    status = "success" if workflow_status.get("lastExecution", {}).get("finished", None) == True else "error"
-    workflow_status = {
-        "service_id": workflow_id,
-        "status": status,
-        "last_execution": workflow_status.get("lastExecution", {}).get("startedAt", None),
-        "message": workflow_status.get("lastExecution", {}).get("message", None),
-        "tool_name": "n8n"
-    }
+    # Add the workflow id and tool name to the workflow status object
+    workflow_status["service_id"] = workflow_id
+    workflow_status["tool_name"] = tool_name
 
     # Insert the workflow status into the database
-    supabase.table("service_updates").insert(workflow_status).execute()
+    supabase.table("updates").insert(workflow_status).execute()
 
 
 def main():
@@ -182,17 +179,10 @@ def main():
                 workflow_status = get_workflow_status(executions)
 
                 # Insert the workflow status into the database
-                insert_workflow_status(workflow_id, workflow_status)
+                insert_workflow_status(workflow_status, workflow_id, os.getenv("TOOL_NAME"))
 
             else:
                 print(f"Skipping workflow with missing ID: {workflow_name}")
-        
-        # Print summary
-        print(f"Total workflows: {len(workflows)}")
-        print(f"Total executions: {len(all_executions)}")
-        
-        # Here you can add code to process the executions data
-        # For example, store in a database, send notifications, etc.
         
         return {
             "workflows_count": len(workflows),

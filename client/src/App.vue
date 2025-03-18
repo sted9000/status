@@ -10,8 +10,8 @@ onMounted(() => {
   // Fetch initial data
   store.fetchClients()
   store.fetchServices()
-  store.fetchServiceUpdates()
-  
+  store.fetchUpdates()
+  store.fetchPlatforms()
   // Setup realtime subscriptions
   store.setupRealtimeSubscriptions()
 })

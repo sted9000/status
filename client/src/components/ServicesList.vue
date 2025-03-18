@@ -6,8 +6,9 @@
         
         <select id="status-filter" v-model="statusFilter" @change="applyStatusFilter">
           <option value="">All Statuses</option>
-          <option value="passed">Passed</option>
-          <option value="failed">Failed</option>
+          <option value="success">Success</option>
+          <option value="error">Error</option>
+          <option value="warning">Warning</option>
         </select>
       </div>
       
@@ -15,8 +16,8 @@
         
         <select id="platform-filter" v-model="platformFilter" @change="applyPlatformFilter">
           <option value="">All Platforms</option>
-          <option v-for="platform in availablePlatforms" :key="platform" :value="platform">
-            {{ platform }}
+          <option v-for="platform in availablePlatforms" :key="platform.id" :value="platform.id">
+            {{ platform.name }}
           </option>
         </select>
       </div>
@@ -54,7 +55,7 @@
           ]"
         >
           <h3>{{ service.name }}</h3>
-          <div class="platform-badge">{{ service.platform }}</div>
+          <div class="platform-badge">{{ service.platforms?.name }}</div>
           
           <div v-if="service.status" class="status-section">
             <div class="status-badge" :class="getStatusClass(service.status)">
@@ -88,26 +89,29 @@ const platformFilter = ref('')
 // Computed properties
 const filteredServices = computed(() => store.filteredServices)
 const serviceStatuses = computed(() => store.serviceStatuses)
-const loading = computed(() => store.loading.services || store.loading.serviceUpdates)
+const platforms = computed(() => store.platforms)
+const loading = computed(() => store.loading.services || store.loading.serviceUpdates || store.loading.platforms)
 const error = computed(() => store.error)
 const selectedClientId = computed(() => store.filters.clientId)
 
 // Get unique platforms for the filter dropdown
 const availablePlatforms = computed(() => {
-  const platforms = new Set(filteredServices.value.map(service => service.platform))
-  return Array.from(platforms).sort()
+  const platformIds = new Set(filteredServices.value.map(service => service.platform_id))
+  return platforms.value
+    .filter(platform => platformIds.has(platform.id))
+    .sort((a, b) => a.name.localeCompare(b.name))
 })
 
 // Combine services with their latest status
 const filteredServicesWithStatus = computed(() => {
-  // Create a map of service statuses by service ID for quick lookup
+  // Create a map of service statuses by service_id for quick lookup
   const statusMap = new Map(
     serviceStatuses.value.map(status => [status.serviceId, status])
   )
   
   return filteredServices.value
     .map(service => {
-      const status = statusMap.get(service.id)
+      const status = statusMap.get(service.service_id)
       if (status) {
         return {
           ...service,
@@ -128,8 +132,8 @@ const filteredServicesWithStatus = computed(() => {
       }
       
       // Apply platform filter if set
-      if (platformFilter.value && service.platform) {
-        if (service.platform !== platformFilter.value) {
+      if (platformFilter.value && service.platform_id) {
+        if (service.platform_id !== platformFilter.value) {
           return false
         }
       }
@@ -155,10 +159,12 @@ function getStatusClass(status) {
   if (!status) return ''
   
   switch (status.toLowerCase()) {
-    case 'passed':
-      return 'status-passed'
-    case 'failed':
-      return 'status-failed'
+    case 'success':
+      return 'status-success'
+    case 'error':
+      return 'status-error'
+    case 'warning':
+      return 'status-warning'
     default:
       return ''
   }
@@ -292,14 +298,19 @@ select option {
   margin-bottom: 0.5rem;
 }
 
-.status-passed {
+.status-success {
   background-color: rgba(46, 204, 113, 0.3);
   color: #2ecc71;
 }
 
-.status-failed {
+.status-error {
   background-color: rgba(231, 76, 60, 0.3);
   color: #e74c3c;
+}
+
+.status-warning {
+  background-color: rgba(243, 156, 18, 0.3);
+  color: #f39c12;
 }
 
 .status-message {

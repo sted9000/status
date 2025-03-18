@@ -6,11 +6,13 @@ export const useSupabaseStore = defineStore('supabase', () => {
   // State
   const clients = ref([])
   const services = ref([])
-  const serviceUpdates = ref([])
+  const updates = ref([])
+  const platforms = ref([])
   const loading = ref({
     clients: false,
     services: false,
-    serviceUpdates: false
+    updates: false,
+    platforms: false
   })
   const error = ref(null)
   const filters = ref({
@@ -26,8 +28,8 @@ export const useSupabaseStore = defineStore('supabase', () => {
     return services.value.filter(service => service.client_id === filters.value.clientId)
   })
 
-  const filteredServiceUpdates = computed(() => {
-    let result = serviceUpdates.value
+  const filteredUpdates = computed(() => {
+    let result = updates.value
 
     if (filters.value.serviceId) {
       result = result.filter(update => update.service_id === filters.value.serviceId)
@@ -50,19 +52,15 @@ export const useSupabaseStore = defineStore('supabase', () => {
     const latestUpdates = new Map()
     
     // Process all service updates to find the latest for each service
-    serviceUpdates.value.forEach(update => {
+    updates.value.forEach(update => {
       const serviceId = update.service_id
       
       if (!latestUpdates.has(serviceId) || 
           new Date(update.updated_at) > new Date(latestUpdates.get(serviceId).updatedAt)) {
-        // Map legacy status values to new passed/failed values if needed
-        let status = update.status
-        if (status === 'success') status = 'passed'
-        else if (['error', 'warning'].includes(status)) status = 'failed'
-        
+        // Map status values to display values        
         latestUpdates.set(serviceId, {
           serviceId,
-          status: status,
+          status: update.status,
           message: update.message,
           updatedAt: update.updated_at,
           toolName: update.tool_name
@@ -96,6 +94,27 @@ export const useSupabaseStore = defineStore('supabase', () => {
     }
   }
 
+  async function fetchPlatforms() {
+    loading.value.platforms = true
+    error.value = null
+    
+    try {
+      const { data, error: err } = await supabase
+        .from('platforms')
+        .select('*')
+        .order('name')
+      
+      if (err) throw err
+      
+      platforms.value = data
+    } catch (err) {
+      error.value = err.message
+      console.error('Error fetching platforms:', err)
+    } finally {
+      loading.value.platforms = false
+    }
+  }
+
   async function fetchServices() {
     loading.value.services = true
     error.value = null
@@ -103,7 +122,13 @@ export const useSupabaseStore = defineStore('supabase', () => {
     try {
       const { data, error: err } = await supabase
         .from('services')
-        .select('*')
+        .select(`
+          *,
+          platforms (
+            id,
+            name
+          )
+        `)
         .order('name')
       
       if (err) throw err
@@ -117,24 +142,24 @@ export const useSupabaseStore = defineStore('supabase', () => {
     }
   }
 
-  async function fetchServiceUpdates() {
-    loading.value.serviceUpdates = true
+  async function fetchUpdates() {
+    loading.value.updates = true
     error.value = null
     
     try {
       const { data, error: err } = await supabase
-        .from('service_updates')
+        .from('updates')
         .select('*')
         .order('updated_at', { ascending: false })
       
       if (err) throw err
       
-      serviceUpdates.value = data
+      updates.value = data
     } catch (err) {
       error.value = err.message
-      console.error('Error fetching service updates:', err)
+      console.error('Error fetching updates:', err)
     } finally {
-      loading.value.serviceUpdates = false
+      loading.value.updates = false
     }
   }
 
@@ -170,16 +195,29 @@ export const useSupabaseStore = defineStore('supabase', () => {
       })
       .subscribe()
 
-    // Subscribe to changes in the service_updates table
+    // Subscribe to changes in the updates table
     supabase
-      .channel('service-updates-changes')
+      .channel('updates-changes')
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
-        table: 'service_updates' 
+        table: 'updates' 
       }, (payload) => {
-        console.log('Service updates change received:', payload)
-        fetchServiceUpdates()
+        console.log('Updates change received:', payload)
+        fetchUpdates()
+      })
+      .subscribe()
+
+    // Subscribe to changes in the platforms table
+    supabase
+      .channel('platforms-changes')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'platforms' 
+      }, (payload) => {
+        console.log('Platforms change received:', payload)
+        fetchPlatforms()
       })
       .subscribe()
   }
@@ -187,16 +225,18 @@ export const useSupabaseStore = defineStore('supabase', () => {
   return { 
     clients, 
     services, 
-    serviceUpdates, 
+    updates,
+    platforms,
     loading, 
     error, 
     filters,
     filteredServices,
-    filteredServiceUpdates,
+    filteredUpdates,
     serviceStatuses,
     fetchClients, 
     fetchServices, 
-    fetchServiceUpdates,
+    fetchUpdates,
+    fetchPlatforms,
     setFilter,
     setupRealtimeSubscriptions
   }
