@@ -8,7 +8,6 @@ load_dotenv()
 
 # N8N API Configuration
 N8N_HOST = os.getenv("N8N_HOST", "http://localhost")
-N8N_PATH = os.getenv("N8N_PATH", "")
 N8N_API_KEY = os.getenv("N8N_API_KEY")
 N8N_API_VERSION = os.getenv("N8N_API_VERSION", "1")
 
@@ -24,7 +23,7 @@ class N8NClient:
             raise ValueError("N8N_API_KEY environment variable is not set")
         
         # Construct the base URL
-        self.base_url = f"{N8N_HOST}/{N8N_PATH}".rstrip("/")
+        self.base_url = f"{N8N_HOST}".rstrip("/")
         self.api_url = f"{self.base_url}/api/v{N8N_API_VERSION}"
         self.headers = {
             "accept": "application/json",
@@ -182,11 +181,6 @@ def main():
 
             else:
                 print(f"Skipping workflow with missing ID: {workflow_name}")
-                
-
-        # exit connection
-        supabase.close()
-        print("Supabase connection closed")
         
         return {
             "workflows_count": len(workflows),
